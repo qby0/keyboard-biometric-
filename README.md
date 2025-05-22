@@ -93,3 +93,4 @@ Spustí HTTP server na http://localhost:8000
 - Registrácia a identifikácia používateľov
 - Mobilné rozhranie
 - Vizualizácia funkcií v reálnom čase
+
