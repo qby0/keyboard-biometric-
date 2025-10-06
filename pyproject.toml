@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=65", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "persona-by-text"
+version = "0.1.0"
+description = "Authorship identification via stylometry using scikit-learn"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "Your Team" }]
+keywords = ["authorship", "stylometry", "nlp", "text-classification"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+  "scikit-learn>=1.2",
+  "joblib>=1.2",
+  "flask>=3.0",
+  "matplotlib>=3.8",
+]
+
+[project.scripts]
+persona-text = "persona_by_text.cli:main"
+persona-text-web = "persona_by_text.webapp:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
