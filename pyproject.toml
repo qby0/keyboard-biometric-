@@ -20,10 +20,12 @@ classifiers = [
 dependencies = [
   "scikit-learn>=1.2",
   "joblib>=1.2",
+  "flask>=3.0",
 ]
 
 [project.scripts]
 persona-text = "persona_by_text.cli:main"
+persona-text-web = "persona_by_text.webapp:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

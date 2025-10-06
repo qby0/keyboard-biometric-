@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from .data import read_dataset_from_directory
+from .ks_data import read_keystroke_dataset
 from .model import (
     create_pipeline,
     fit_and_evaluate,
@@ -14,6 +15,7 @@ from .model import (
     predict_texts,
     save_model,
 )
+from .keystroke import create_keystroke_pipeline, fit_keystroke_and_evaluate
 
 
 def _positive_float(value: str) -> float:
@@ -136,6 +138,27 @@ def build_parser() -> argparse.ArgumentParser:
     group.add_argument("--text", help="Raw text to classify")
     p_pred.set_defaults(func=cmd_predict)
 
+    # Keystroke subcommands
+    p_ks_train = sub.add_parser(
+        "ks-train", help="Train keystroke dynamics model on JSON datasets"
+    )
+    p_ks_train.add_argument("--data", required=True, help="Dataset root (user/*.json)")
+    p_ks_train.add_argument(
+        "--val-split", type=_positive_float, default=0.2, help="Validation split"
+    )
+    p_ks_train.add_argument(
+        "--model-out", required=True, help="Path to save model (e.g., ks_model.joblib)"
+    )
+    p_ks_train.add_argument("--random-state", type=int, default=42)
+    p_ks_train.set_defaults(func=cmd_ks_train)
+
+    p_ks_eval = sub.add_parser(
+        "ks-evaluate", help="Evaluate a keystroke model on a dataset"
+    )
+    p_ks_eval.add_argument("--model", required=True, help="Path to model .joblib")
+    p_ks_eval.add_argument("--data", required=True, help="Dataset root (user/*.json)")
+    p_ks_eval.set_defaults(func=cmd_ks_evaluate)
+
     return parser
 
 
@@ -143,3 +166,44 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     return args.func(args)
+
+
+# -------------- Keystroke command implementations --------------
+
+def cmd_ks_train(args: argparse.Namespace) -> int:
+    sequences, labels = read_keystroke_dataset(args.data)
+    result = fit_keystroke_and_evaluate(
+        sequences,
+        labels,
+        validation_split=args.val_split,
+        random_state=args.random_state,
+    )
+    if args.model_out:
+        model_path = Path(args.model_out)
+        model_path.parent.mkdir(parents=True, exist_ok=True)
+        from .model import save_model  # reuse joblib helper
+
+        save_model(result["model"], str(model_path))
+
+    print("Accuracy:", f"{result['accuracy']:.4f}")
+    print("Macro-F1:", f"{result['macro_f1']:.4f}")
+    print("\nClassification report:\n")
+    print(result["report"])
+    return 0
+
+
+def cmd_ks_evaluate(args: argparse.Namespace) -> int:
+    from .model import load_model
+    model = load_model(args.model)
+    sequences, labels = read_keystroke_dataset(args.data)
+    preds = model.predict(sequences)
+
+    from sklearn.metrics import accuracy_score, classification_report, f1_score
+
+    acc = accuracy_score(labels, preds)
+    macro = f1_score(labels, preds, average="macro")
+    print("Accuracy:", f"{acc:.4f}")
+    print("Macro-F1:", f"{macro:.4f}")
+    print("\nClassification report:\n")
+    print(classification_report(labels, preds))
+    return 0
