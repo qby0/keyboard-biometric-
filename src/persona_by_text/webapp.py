@@ -8,6 +8,9 @@ from typing import Any, Dict
 
 from flask import Flask, jsonify, render_template_string, request
 
+from .ks_data import read_keystroke_dataset
+from .keystroke import fit_keystroke_and_evaluate
+
 try:
     # Optional import; only used if prediction is enabled
     from .model import load_model
@@ -93,6 +96,67 @@ def create_app(save_root: str | os.PathLike[str] = "./keystroke_data") -> Flask:
         except Exception as e:  # minimal error handling
             return jsonify({"error": "prediction failed"}), 500
 
+    @app.post("/api/train")
+    def train():
+        """Train keystroke model on server and load it for prediction."""
+        try:
+            payload: Dict[str, Any] = request.get_json(force=True)
+        except Exception:
+            payload = {}
+
+        data_dir = str(payload.get("data_dir", "./keystroke_data"))
+        model_out = str(payload.get("model_out", "./ks_model.joblib"))
+        try:
+            val_split = float(payload.get("val_split", 0.2))
+        except Exception:
+            val_split = 0.2
+        try:
+            random_state = int(payload.get("random_state", 42))
+        except Exception:
+            random_state = 42
+
+        # Load dataset
+        try:
+            sequences, labels = read_keystroke_dataset(data_dir)
+        except Exception as e:
+            return jsonify({"error": f"dataset error: {e}"}), 400
+
+        # Train and evaluate
+        try:
+            result = fit_keystroke_and_evaluate(
+                sequences,
+                labels,
+                validation_split=val_split,
+                random_state=random_state,
+            )
+        except Exception as e:
+            return jsonify({"error": f"training failed: {e}"}), 500
+
+        # Save and load into app
+        try:
+            from .model import save_model  # local import to avoid circulars at import-time
+
+            save_model(result["model"], model_out)
+            app.config["KS_MODEL_PATH"] = model_out
+            app.config["KS_MODEL"] = result["model"]
+        except Exception as e:
+            return jsonify({"error": f"failed to save model: {e}"}), 500
+
+        # Prepare response
+        resp = {
+            "ok": True,
+            "model_path": model_out,
+            "accuracy": float(result["accuracy"]),
+            "macro_f1": float(result["macro_f1"]),
+        }
+        try:
+            clf = result["model"].named_steps.get("clf")
+            classes = list(getattr(clf, "classes_", []))
+            resp["classes"] = [str(c) for c in classes]
+        except Exception:
+            pass
+        return jsonify(resp)
+
     return app
 
 
@@ -135,6 +199,27 @@ INDEX_HTML = r"""
   <div class="row">
     <label>Type here</label>
     <textarea id="typing" rows="6" placeholder="Start typing..." ></textarea>
+  </div>
+
+  <h3>Train model (server-side)</h3>
+  <div class="row">
+    <label>Data directory</label>
+    <input id="data-dir" value="./keystroke_data" />
+  </div>
+  <div class="row">
+    <label>Model output path</label>
+    <input id="model-out" value="./ks_model.joblib" />
+  </div>
+  <div class="row">
+    <label>Validation split</label>
+    <input id="val-split" type="number" step="0.05" min="0.05" max="0.9" value="0.2" />
+  </div>
+  <div class="row">
+    <label>Random state</label>
+    <input id="random-state" type="number" value="42" />
+  </div>
+  <div class="row">
+    <button id="train">Train</button>
   </div>
 
   <div class="row">
@@ -210,6 +295,10 @@ INDEX_HTML = r"""
   const user = document.getElementById('user');
   const phrase = document.getElementById('phrase');
   const topList = document.getElementById('top-similar');
+  const dataDir = document.getElementById('data-dir');
+  const modelOut = document.getElementById('model-out');
+  const valSplit = document.getElementById('val-split');
+  const randState = document.getElementById('random-state');
 
   let events = [];
   let t0 = null;
@@ -281,6 +370,31 @@ INDEX_HTML = r"""
             topList.appendChild(li);
           }
         }
+      } else {
+        status.textContent = 'Error: ' + (data.error || 'unknown'); status.className='err';
+      }
+    } catch (err) {
+      status.textContent = 'Network error'; status.className='err';
+    }
+  });
+
+  document.getElementById('train').addEventListener('click', async () => {
+    status.textContent = 'Training...'; status.className='';
+    try {
+      const payload = {
+        data_dir: dataDir.value,
+        model_out: modelOut.value,
+        val_split: parseFloat(valSplit.value),
+        random_state: parseInt(randState.value),
+      };
+      const resp = await fetch('/api/train', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        status.textContent = `Trained. Acc=${(data.accuracy||0).toFixed(3)} F1=${(data.macro_f1||0).toFixed(3)} -> ${data.model_path}`;
+        status.className='ok';
       } else {
         status.textContent = 'Error: ' + (data.error || 'unknown'); status.className='err';
       }
