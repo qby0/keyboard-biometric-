@@ -8,11 +8,35 @@ from typing import Any, Dict
 
 from flask import Flask, jsonify, render_template_string, request
 
+try:
+    # Optional import; only used if prediction is enabled
+    from .model import load_model
+except Exception:  # pragma: no cover - optional path
+    load_model = None  # type: ignore
+
 
 def create_app(save_root: str | os.PathLike[str] = "./keystroke_data") -> Flask:
     app = Flask(__name__)
     save_root_path = Path(save_root)
     save_root_path.mkdir(parents=True, exist_ok=True)
+
+    # Lazy model holder for prediction (optional)
+    app.config["KS_MODEL_PATH"] = os.getenv("KS_MODEL_PATH")
+    app.config["KS_MODEL"] = None
+
+    def _get_model():
+        model = app.config.get("KS_MODEL")
+        if model is not None:
+            return model
+        model_path = app.config.get("KS_MODEL_PATH")
+        if not model_path or load_model is None:
+            return None
+        try:
+            model = load_model(model_path)
+            app.config["KS_MODEL"] = model
+            return model
+        except Exception:
+            return None
 
     @app.get("/")
     def index():
@@ -40,6 +64,36 @@ def create_app(save_root: str | os.PathLike[str] = "./keystroke_data") -> Flask:
         }
         (user_dir / fname).write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
         return jsonify({"ok": True, "file": str(user_dir / fname)})
+
+    @app.post("/api/predict")
+    def predict():
+        """Predict user label from keystroke events. Requires KS_MODEL_PATH env var."""
+        model = _get_model()
+        if model is None:
+            return jsonify({"error": "Prediction model not loaded. Set KS_MODEL_PATH env var."}), 503
+
+        payload: Dict[str, Any] = request.get_json(force=True)
+        events = payload.get("events", [])
+        if not isinstance(events, list) or not events:
+            return jsonify({"error": "events list required"}), 400
+
+        try:
+            labels = model.predict([events])
+            result = {"label": str(labels[0])}
+            if hasattr(model, "predict_proba"):
+                import numpy as np  # local import
+
+                proba = model.predict_proba([events])[0]
+                classes = getattr(model.named_steps.get("clf"), "classes_", [])
+                pairs = [(str(classes[i]), float(proba[i])) for i in range(len(classes))]
+                pairs.sort(key=lambda x: x[1], reverse=True)
+                # Return top-3 for brevity
+                result["probabilities"] = [
+                    {"label": lbl, "p": p} for lbl, p in pairs[:3]
+                ]
+            return jsonify(result)
+        except Exception as e:  # minimal error handling
+            return jsonify({"error": "prediction failed"}), 500
 
     return app
 
@@ -87,6 +141,7 @@ INDEX_HTML = r"""
 
   <div class="row">
     <button id="submit">Submit sample</button>
+    <button id="predict">Predict</button>
     <span id="status"></span>
   </div>
 
@@ -121,6 +176,28 @@ INDEX_HTML = r"""
       if (resp.ok) {
         status.textContent = 'Saved: ' + data.file; status.className='ok';
         events = []; t0 = null; typing.value = '';
+      } else {
+        status.textContent = 'Error: ' + (data.error || 'unknown'); status.className='err';
+      }
+    } catch (err) {
+      status.textContent = 'Network error'; status.className='err';
+    }
+  });
+
+  document.getElementById('predict').addEventListener('click', async () => {
+    status.textContent = 'Predicting...'; status.className='';
+    try {
+      const resp = await fetch('/api/predict', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ events })
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        let msg = 'Predicted: ' + data.label;
+        if (data.probabilities) {
+          msg += ' (' + data.probabilities.map(p => p.label+':'+p.p.toFixed(2)).join(', ') + ')';
+        }
+        status.textContent = msg; status.className='ok';
       } else {
         status.textContent = 'Error: ' + (data.error || 'unknown'); status.className='err';
       }
