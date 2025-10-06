@@ -16,6 +16,7 @@ from .model import (
     save_model,
 )
 from .keystroke import create_keystroke_pipeline, fit_keystroke_and_evaluate
+from .reporting import generate_text_report, generate_keystroke_report
 
 
 def _positive_float(value: str) -> float:
@@ -159,6 +160,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_ks_eval.add_argument("--data", required=True, help="Dataset root (user/*.json)")
     p_ks_eval.set_defaults(func=cmd_ks_evaluate)
 
+    # Reporting subcommands
+    p_report = sub.add_parser("report", help="Generate text model report with confusion matrix")
+    p_report.add_argument("--model", required=True, help="Path to text model .joblib")
+    p_report.add_argument("--data", required=True, help="Dataset root (text)")
+    p_report.add_argument("--out", required=True, help="Output directory for report")
+    p_report.set_defaults(func=cmd_report)
+
+    p_ks_report = sub.add_parser("ks-report", help="Generate keystroke model report")
+    p_ks_report.add_argument("--model", required=True, help="Path to ks model .joblib")
+    p_ks_report.add_argument("--data", required=True, help="Dataset root (keystroke)")
+    p_ks_report.add_argument("--out", required=True, help="Output directory for report")
+    p_ks_report.set_defaults(func=cmd_ks_report)
+
     return parser
 
 
@@ -206,4 +220,16 @@ def cmd_ks_evaluate(args: argparse.Namespace) -> int:
     print("Macro-F1:", f"{macro:.4f}")
     print("\nClassification report:\n")
     print(classification_report(labels, preds))
+    return 0
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    generate_text_report(args.model, args.data, args.out)
+    print(f"Report saved to {args.out}")
+    return 0
+
+
+def cmd_ks_report(args: argparse.Namespace) -> int:
+    generate_keystroke_report(args.model, args.data, args.out)
+    print(f"Report saved to {args.out}")
     return 0
