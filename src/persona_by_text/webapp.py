@@ -26,6 +26,11 @@ def create_app(save_root: str | os.PathLike[str] = "./keystroke_data") -> Flask:
     # Lazy model holder for prediction (optional)
     app.config["KS_MODEL_PATH"] = os.getenv("KS_MODEL_PATH")
     app.config["KS_MODEL"] = None
+    app.config["PROMPT"] = os.getenv(
+        "PROMPT",
+        "The quick brown fox jumps over the lazy dog",
+    )
+    app.config["AUTO_TRAIN"] = os.getenv("AUTO_TRAIN", "1") not in ("0", "false", "False")
 
     def _get_model():
         model = app.config.get("KS_MODEL")
@@ -43,13 +48,13 @@ def create_app(save_root: str | os.PathLike[str] = "./keystroke_data") -> Flask:
 
     @app.get("/")
     def index():
-        return render_template_string(INDEX_HTML)
+        return render_template_string(INDEX_HTML, prompt=app.config["PROMPT"])
 
     @app.post("/api/submit")
     def submit():
         payload: Dict[str, Any] = request.get_json(force=True)
         user_id = str(payload.get("user_id", "unknown")).strip()
-        phrase = str(payload.get("phrase", "")).strip()
+        phrase = str(payload.get("phrase", app.config["PROMPT"])).strip()
         events = payload.get("events", [])
         if not user_id:
             return jsonify({"error": "user_id required"}), 400
@@ -68,12 +73,66 @@ def create_app(save_root: str | os.PathLike[str] = "./keystroke_data") -> Flask:
         (user_dir / fname).write_text(json.dumps(out, ensure_ascii=False), encoding="utf-8")
         return jsonify({"ok": True, "file": str(user_dir / fname)})
 
+    def _load_filtered_dataset(data_dir: str, phrase: str):
+        sequences = []
+        labels = []
+        root = Path(data_dir)
+        for user_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+            label = user_dir.name
+            for jf in sorted(user_dir.rglob("*.json")):
+                try:
+                    data = json.loads(jf.read_text(encoding="utf-8"))
+                except Exception:
+                    continue
+                events = None
+                file_phrase = None
+                if isinstance(data, list):
+                    events = data
+                elif isinstance(data, dict):
+                    events = data.get("events")
+                    file_phrase = data.get("phrase")
+                if not isinstance(events, list) or not events:
+                    continue
+                if phrase and file_phrase and str(file_phrase) != str(phrase):
+                    continue
+                sequences.append(events)
+                labels.append(label)
+        if not sequences:
+            raise ValueError("no sequences after filtering")
+        return sequences, labels
+
+    def _auto_train_if_needed():
+        if app.config.get("KS_MODEL") is not None:
+            return True
+        if not app.config.get("AUTO_TRAIN"):
+            return False
+        data_dir = str(save_root_path)
+        try:
+            sequences, labels = _load_filtered_dataset(data_dir, app.config["PROMPT"])
+            result = fit_keystroke_and_evaluate(
+                sequences,
+                labels,
+                validation_split=0.2,
+                random_state=42,
+            )
+            from .model import save_model  # local import
+
+            model_out = str(Path("./ks_model.joblib").absolute())
+            save_model(result["model"], model_out)
+            app.config["KS_MODEL_PATH"] = model_out
+            app.config["KS_MODEL"] = result["model"]
+            return True
+        except Exception:
+            return False
+
     @app.post("/api/predict")
     def predict():
         """Predict user label from keystroke events. Requires KS_MODEL_PATH env var."""
         model = _get_model()
         if model is None:
-            return jsonify({"error": "Prediction model not loaded. Set KS_MODEL_PATH env var."}), 503
+            if not _auto_train_if_needed():
+                return jsonify({"error": "Prediction model not loaded. Collect data and Train first."}), 503
+            model = app.config.get("KS_MODEL")
 
         payload: Dict[str, Any] = request.get_json(force=True)
         events = payload.get("events", [])
@@ -183,22 +242,37 @@ INDEX_HTML = r"""
   </style>
 </head>
 <body>
-  <h1>Keystroke Capture</h1>
-  <p class="help">Печатайте в поле ниже — время будет записываться. Клавиши на клавиатуре подсвечиваются при нажатии. Кнопка Predict покажет топ похожих пользователей.</p>
+  <h1>Keystroke App</h1>
+  <p class="help">Печатайте заданный текст. Вкладка Collect — сбор образцов с именем пользователя. Вкладка Recognize — распознавание по сохранённым профилям.</p>
 
   <div class="row">
-    <label>User ID</label>
-    <input id="user" placeholder="e.g., user123" />
+    <button id="tab-collect">Collect</button>
+    <button id="tab-recognize">Recognize</button>
   </div>
 
-  <div class="row">
-    <label>Prompt phrase (optional)</label>
-    <input id="phrase" placeholder="e.g., The quick brown fox..." />
+  <div id="section-collect">
+    <div class="row">
+      <label>User ID</label>
+      <input id="user" placeholder="e.g., user123" />
+    </div>
+    <div class="row">
+      <label>Prompt</label>
+      <div id="prompt" class="help"></div>
+    </div>
+    <div class="row">
+      <label>Type here</label>
+      <textarea id="typing" rows="6" placeholder="Start typing..." ></textarea>
+    </div>
   </div>
-
-  <div class="row">
-    <label>Type here</label>
-    <textarea id="typing" rows="6" placeholder="Start typing..." ></textarea>
+  <div id="section-recognize" style="display:none;">
+    <div class="row">
+      <label>Prompt</label>
+      <div id="prompt2" class="help"></div>
+    </div>
+    <div class="row">
+      <label>Type here</label>
+      <textarea id="typing2" rows="6" placeholder="Start typing for recognition..." ></textarea>
+    </div>
   </div>
 
   <h3>Train model (server-side)</h3>
@@ -279,8 +353,8 @@ INDEX_HTML = r"""
   </div>
 
   <div class="row">
-    <button id="submit">Submit sample</button>
-    <button id="predict">Predict</button>
+    <button id="submit">Save sample</button>
+    <button id="predict">Recognize</button>
     <span id="status"></span>
   </div>
 
@@ -290,11 +364,28 @@ INDEX_HTML = r"""
   </div>
 
   <script>
+  const PROMPT = {{ prompt|tojson }};
   const typing = document.getElementById('typing');
+  const typing2 = document.getElementById('typing2');
   const status = document.getElementById('status');
   const user = document.getElementById('user');
-  const phrase = document.getElementById('phrase');
   const topList = document.getElementById('top-similar');
+  const sectionCollect = document.getElementById('section-collect');
+  const sectionRecognize = document.getElementById('section-recognize');
+  const promptDiv = document.getElementById('prompt');
+  const promptDiv2 = document.getElementById('prompt2');
+  document.getElementById('tab-collect').addEventListener('click', () => {
+    sectionCollect.style.display = '';
+    sectionRecognize.style.display = 'none';
+    resetCapture();
+  });
+  document.getElementById('tab-recognize').addEventListener('click', () => {
+    sectionCollect.style.display = 'none';
+    sectionRecognize.style.display = '';
+    resetCapture(true);
+  });
+  promptDiv.textContent = PROMPT;
+  promptDiv2.textContent = PROMPT;
   const dataDir = document.getElementById('data-dir');
   const modelOut = document.getElementById('model-out');
   const valSplit = document.getElementById('val-split');
@@ -302,6 +393,7 @@ INDEX_HTML = r"""
 
   let events = [];
   let t0 = null;
+  let recognizeMode = false;
 
   function now() { return performance.now(); }
 
@@ -321,28 +413,37 @@ INDEX_HTML = r"""
     if (active) el.classList.add('active'); else el.classList.remove('active');
   }
 
-  typing.addEventListener('keydown', (e) => {
+  function onKeyDown(target, e) {
     if (t0 === null) t0 = now();
     events.push({ key: e.key, type: 'down', t: now() - t0 });
     setKeyActive(keyIdFromEventKey(e.key), true);
-  });
-  typing.addEventListener('keyup', (e) => {
+  }
+  function onKeyUp(target, e) {
     if (t0 === null) t0 = now();
     events.push({ key: e.key, type: 'up', t: now() - t0 });
     setKeyActive(keyIdFromEventKey(e.key), false);
-  });
+  }
+  typing.addEventListener('keydown', (e) => onKeyDown(typing, e));
+  typing.addEventListener('keyup', (e) => onKeyUp(typing, e));
+  typing2.addEventListener('keydown', (e) => onKeyDown(typing2, e));
+  typing2.addEventListener('keyup', (e) => onKeyUp(typing2, e));
+
+  function resetCapture(recognize=false) {
+    events = []; t0 = null; recognizeMode = recognize;
+    typing.value = ''; typing2.value=''; topList.innerHTML=''; status.textContent='';
+  }
 
   document.getElementById('submit').addEventListener('click', async () => {
     status.textContent = 'Submitting...'; status.className='';
     try {
       const resp = await fetch('/api/submit', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: user.value, phrase: phrase.value, events })
+        body: JSON.stringify({ user_id: user.value, phrase: PROMPT, events })
       });
       const data = await resp.json();
       if (resp.ok) {
         status.textContent = 'Saved: ' + data.file; status.className='ok';
-        events = []; t0 = null; typing.value = '';
+        resetCapture(false);
         topList.innerHTML = '';
       } else {
         status.textContent = 'Error: ' + (data.error || 'unknown'); status.className='err';
