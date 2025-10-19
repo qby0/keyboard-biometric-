@@ -1,0 +1,37 @@
+# Node/Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.cache/
+
+# Python/Backend
+backend/venv/
+backend/__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+
+# Local data (do not commit real biometric data)
+backend/data/*.yaml
+backend/data/*.yml
+backend/data/*.json
+!backend/data/.keep
+
+# Environment and editor
+.env
+*.env
+.vscode/
+.idea/
+.DS_Store
+
+# Ignore all READMEs except root
+**/README.md
+!README.md
+
+# Logs
+logs/
+*.log
+
+# Misc build
+coverage/
+.eggs/
+*.egg-info/

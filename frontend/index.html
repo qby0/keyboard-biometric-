@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keystroke Biometrics - Identity Recognition</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo">
+                <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="40" height="40" rx="8" fill="url(#gradient)"/>
+                    <path d="M12 15h16M12 20h16M12 25h10" stroke="white" stroke-width="2" stroke-linecap="round"/>
+                    <defs>
+                        <linearGradient id="gradient" x1="0" y1="0" x2="40" y2="40">
+                            <stop offset="0%" stop-color="#667eea"/>
+                            <stop offset="100%" stop-color="#764ba2"/>
+                        </linearGradient>
+                    </defs>
+                </svg>
+                <h1>Keystroke Biometrics</h1>
+            </div>
+            <div class="stats-mini">
+                <div class="stat-item">
+                    <span class="stat-value" id="totalUsers">0</span>
+                    <span class="stat-label">Users</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <!-- Left Panel: Typing Test -->
+            <div class="typing-panel">
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🎯 Typing Test</h2>
+                        <p class="subtitle">Type the text below for biometric analysis</p>
+                    </div>
+                    
+                    <!-- Reference Text -->
+                    <div class="reference-text" id="referenceText">
+                        The quick brown fox jumps over the lazy dog. This sentence contains every letter of the alphabet.
+                    </div>
+                    
+                    <!-- Input Area -->
+                    <div class="input-container">
+                        <textarea 
+                            id="typingInput" 
+                            placeholder="Start typing here..."
+                            autocomplete="off"
+                            autocorrect="off"
+                            autocapitalize="off"
+                            spellcheck="false"
+                        ></textarea>
+                        <div class="input-overlay" id="inputOverlay"></div>
+                    </div>
+                    
+                    <!-- Live Keystroke Display -->
+                    <div class="keystroke-display">
+                        <h3>⌨️ Recent Keystrokes</h3>
+                        <div class="key-bubbles" id="keyBubbles"></div>
+                    </div>
+                    
+                    <!-- Real-time Stats -->
+                    <div class="realtime-stats">
+                        <div class="stat">
+                            <span class="stat-icon">⚡</span>
+                            <div>
+                                <div class="stat-value" id="typingSpeed">0</div>
+                                <div class="stat-label">CPM</div>
+                            </div>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-icon">⏱️</span>
+                            <div>
+                                <div class="stat-value" id="avgLatency">0</div>
+                                <div class="stat-label">Avg Latency (ms)</div>
+                            </div>
+                        </div>
+                        <div class="stat">
+                            <span class="stat-icon">📊</span>
+                            <div>
+                                <div class="stat-value" id="accuracy">0%</div>
+                                <div class="stat-label">Accuracy</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Username Input -->
+                    <div class="username-section">
+                        <div class="username-toggle">
+                            <button class="toggle-btn active" id="newUserBtn">New User</button>
+                            <button class="toggle-btn" id="existingUserBtn">Existing</button>
+                        </div>
+                        <input 
+                            type="text" 
+                            id="usernameInput" 
+                            placeholder="Enter your name"
+                            class="username-input"
+                        />
+                        <select id="existingUserSelect" class="username-input" style="display: none;">
+                            <option value="">Select a user...</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="action-buttons">
+                        <button class="btn btn-primary" id="registerBtn" disabled>
+                            <span class="btn-icon">✓</span>
+                            Register Pattern
+                        </button>
+                        <button class="btn btn-secondary" id="identifyBtn" disabled>
+                            <span class="btn-icon">🔍</span>
+                            Identify
+                        </button>
+                        <button class="btn btn-ghost" id="resetBtn">
+                            <span class="btn-icon">↻</span>
+                            Reset
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Results -->
+            <div class="results-panel">
+                <!-- Top Matches -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🏆 Top Matches</h2>
+                        <p class="subtitle">Users with similar typing patterns</p>
+                    </div>
+                    
+                    <div class="matches-list" id="matchesList">
+                        <div class="empty-state">
+                            <div class="empty-icon">👤</div>
+                            <p>No results yet</p>
+                            <p class="empty-hint">Complete typing and press "Identify"</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Registered Users List -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>👥 Registered Users</h2>
+                        <p class="subtitle">Click to view details</p>
+                    </div>
+                    
+                    <div class="users-list" id="usersList">
+                        <div class="empty-state">
+                            <div class="empty-icon">👤</div>
+                            <p>No users yet</p>
+                            <p class="empty-hint">Register your pattern</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Status -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>📈 System Statistics</h2>
+                    </div>
+                    
+                    <div class="system-stats">
+                        <div class="system-stat">
+                            <span class="label">Total Users:</span>
+                            <span class="value" id="systemTotalUsers">0</span>
+                        </div>
+                        <div class="system-stat">
+                            <span class="label">Total Samples:</span>
+                            <span class="value" id="systemTotalSamples">0</span>
+                        </div>
+                        <div class="system-stat">
+                            <span class="label">Avg Samples per User:</span>
+                            <span class="value" id="systemAvgSamples">0</span>
+                        </div>
+                        <div class="system-stat">
+                            <span class="label">API Status:</span>
+                            <span class="value status" id="apiStatus">
+                                <span class="status-dot"></span>
+                                Checking...
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Feature Visualization -->
+                <div class="card">
+                    <div class="card-header">
+                        <h2>🔬 Biometric Features</h2>
+                    </div>
+                    
+                    <div class="features-grid" id="featuresGrid">
+                        <div class="feature-item">
+                            <span class="feature-label">Dwell Time</span>
+                            <div class="feature-bar">
+                                <div class="feature-fill" style="width: 0%"></div>
+                            </div>
+                            <span class="feature-value">0 ms</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-label">Flight Time</span>
+                            <div class="feature-bar">
+                                <div class="feature-fill" style="width: 0%"></div>
+                            </div>
+                            <span class="feature-value">0 ms</span>
+                        </div>
+                        <div class="feature-item">
+                            <span class="feature-label">Rhythm Consistency</span>
+                            <div class="feature-bar">
+                                <div class="feature-fill" style="width: 0%"></div>
+                            </div>
+                            <span class="feature-value">0%</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Loading Overlay -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <p>Processing data...</p>
+    </div>
+
+    <!-- User Details Modal -->
+    <div class="modal-overlay" id="userDetailsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📊 User Details</h2>
+                <button class="modal-close" id="closeModal">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Content is loading dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
