@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 echo -e "${PURPLE}"
 echo "╔════════════════════════════════════════════════════════════╗"
 echo "║                                                            ║"
-echo "║       🔐  Keystroke Biometrics                            ║"
+echo "║         Keystroke Biometrics                            ║"
 echo "║       Биометрическая идентификация                        ║"
 echo "║                                                            ║"
 echo "╚════════════════════════════════════════════════════════════╝"
@@ -33,7 +33,7 @@ check_requirement() {
 }
 
 # Проверка системных требований
-echo -e "\n${CYAN}📋 Проверка системных требований...${NC}\n"
+echo -e "\n${CYAN} Проверка системных требований...${NC}\n"
 
 check_requirement python3
 PYTHON_OK=$?
@@ -42,7 +42,7 @@ check_requirement pip3
 PIP_OK=$?
 
 if [ $PYTHON_OK -ne 0 ] || [ $PIP_OK -ne 0 ]; then
-    echo -e "\n${RED}❌ Не все требования выполнены!${NC}"
+    echo -e "\n${RED} Не все требования выполнены!${NC}"
     echo -e "${YELLOW}Установите Python 3 и pip3${NC}"
     exit 1
 fi
@@ -51,10 +51,10 @@ fi
 PYTHON_VERSION=$(python3 --version | cut -d' ' -f2 | cut -d'.' -f1,2)
 echo -e "${GREEN}✓${NC} Python версия: $PYTHON_VERSION"
 
-echo -e "\n${GREEN}✅ Все требования выполнены!${NC}"
+echo -e "\n${GREEN} Все требования выполнены!${NC}"
 
 # Установка backend
-echo -e "\n${CYAN}📦 Настройка Backend...${NC}\n"
+echo -e "\n${CYAN} Настройка Backend...${NC}\n"
 
 cd "$PROJECT_DIR/backend"
 
@@ -94,14 +94,14 @@ read -p "Ваш выбор (1-5): " choice
 
 case $choice in
     1)
-        echo -e "\n${GREEN}🚀 Запуск Backend...${NC}\n"
+        echo -e "\n${GREEN} Запуск Backend...${NC}\n"
         cd "$PROJECT_DIR/backend"
         source venv/bin/activate
         python app.py
         ;;
     
     2)
-        echo -e "\n${GREEN}🚀 Запуск полной системы...${NC}\n"
+        echo -e "\n${GREEN} Запуск полной системы...${NC}\n"
         
         # Запуск backend в фоне
         cd "$PROJECT_DIR/backend"
@@ -110,7 +110,7 @@ case $choice in
         BACKEND_PID=$!
         
         echo -e "${GREEN}✓${NC} Backend запущен (PID: $BACKEND_PID)"
-        echo -e "${YELLOW}⏳ Ожидание инициализации Backend...${NC}"
+        echo -e "${YELLOW} Ожидание инициализации Backend...${NC}"
         sleep 3
         
         # Проверка, что backend работает
@@ -123,7 +123,7 @@ case $choice in
         fi
         
         # Запуск frontend
-        echo -e "\n${GREEN}🌐 Запуск Frontend...${NC}"
+        echo -e "\n${GREEN} Запуск Frontend...${NC}"
         echo -e "${CYAN}Откройте браузер: ${YELLOW}http://localhost:8000${NC}\n"
         
         cd "$PROJECT_DIR/frontend"
@@ -134,7 +134,7 @@ case $choice in
         ;;
     
     3)
-        echo -e "\n${GREEN}🧪 Запуск Backend и тестов...${NC}\n"
+        echo -e "\n${GREEN} Запуск Backend и тестов...${NC}\n"
         
         # Запуск backend в фоне
         cd "$PROJECT_DIR/backend"
@@ -161,7 +161,7 @@ case $choice in
     
     4)
         echo -e "\n${PURPLE}╔════════════════════════════════════════════════════════════╗${NC}"
-        echo -e "${PURPLE}║  📚 Информация о проекте                                   ║${NC}"
+        echo -e "${PURPLE}║  Информация о проекте                                   ║${NC}"
         echo -e "${PURPLE}╚════════════════════════════════════════════════════════════╝${NC}"
         echo ""
         echo -e "${CYAN}Название:${NC} Keystroke Biometrics"
@@ -192,12 +192,12 @@ case $choice in
         ;;
     
     5)
-        echo -e "\n${CYAN}👋 До свидания!${NC}\n"
+        echo -e "\n${CYAN} До свидания!${NC}\n"
         exit 0
         ;;
     
     *)
-        echo -e "\n${RED}❌ Неверный выбор${NC}\n"
+        echo -e "\n${RED} Неверный выбор${NC}\n"
         exit 1
         ;;
 esac
