@@ -1,28 +1,28 @@
 #!/bin/bash
 
-echo "🚀 Запуск Keystroke Biometrics Backend..."
+echo "🚀 Starting Keystroke Biometrics Backend..."
 
 cd "$(dirname "$0")/backend"
 
-# Проверка наличия виртуального окружения
+# Check virtual environment
 if [ ! -d "venv" ]; then
-    echo " Создание виртуального окружения..."
+    echo " Creating virtual environment..."
     python3 -m venv venv
 fi
 
-# Активация виртуального окружения
-echo " Активация виртуального окружения..."
+# Activate virtual environment
+echo " Activating virtual environment..."
 source venv/bin/activate
 
-# Установка зависимостей
-echo "📥 Установка зависимостей..."
+# Install dependencies
+echo "📥 Installing dependencies..."
 pip install -q -r requirements.txt
 
-# Создание директории для данных
+# Create data directory
 mkdir -p data
 
-echo "✅ Backend готов!"
-echo "🌐 Запуск Flask сервера на http://localhost:5000"
+echo "✅ Backend is ready!"
+echo "🌐 Starting Flask server at http://localhost:5000"
 echo ""
 
 # Запуск приложения

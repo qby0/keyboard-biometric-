@@ -1,5 +1,5 @@
 // ========================================
-// Конфигурация и состояние приложения
+// App configuration and state
 // ========================================
 
 const API_BASE_URL = 'http://localhost:5000/api';
@@ -26,7 +26,7 @@ const state = {
 };
 
 // ========================================
-// DOM элементы
+// DOM elements
 // ========================================
 
 const elements = {
@@ -61,7 +61,7 @@ const elements = {
 let isExistingUser = false;
 
 // ========================================
-// Инициализация
+// Initialization
 // ========================================
 
 function init() {
@@ -82,25 +82,25 @@ function init() {
 // ========================================
 
 function setupEventListeners() {
-    // Захват нажатий клавиш
+    // Keystroke listeners
     elements.typingInput.addEventListener('keydown', handleKeyDown);
     elements.typingInput.addEventListener('keyup', handleKeyUp);
     elements.typingInput.addEventListener('input', handleInput);
     
-    // Кнопки действий
+    // Action buttons
     elements.registerBtn.addEventListener('click', handleRegister);
     elements.identifyBtn.addEventListener('click', handleIdentify);
     elements.resetBtn.addEventListener('click', handleReset);
     
-    // Проверка имени пользователя
+    // Username checks
     elements.usernameInput.addEventListener('input', updateButtonStates);
     elements.existingUserSelect.addEventListener('change', updateButtonStates);
     
-    // Переключение между новым и существующим пользователем
+    // Toggle between new/existing user
     elements.newUserBtn.addEventListener('click', () => toggleUserMode(false));
     elements.existingUserBtn.addEventListener('click', () => toggleUserMode(true));
     
-    // Модальное окно
+    // Modal
     elements.closeModal.addEventListener('click', closeUserDetailsModal);
     elements.userDetailsModal.addEventListener('click', (e) => {
         if (e.target === elements.userDetailsModal) {
@@ -110,13 +110,13 @@ function setupEventListeners() {
 }
 
 // ========================================
-// Обработка нажатий клавиш
+// Keystroke handling
 // ========================================
 
 function handleKeyDown(event) {
     const timestamp = Date.now();
     
-    // Начало набора (автостарт таймера)
+    // Start typing (auto start timer)
     if (!state.isTyping) {
         state.isTyping = true;
         state.startTime = timestamp;
@@ -124,13 +124,13 @@ function handleKeyDown(event) {
         state.completed = false;
     }
     
-    // Игнорируем специальные клавиши для отображения
+    // Ignore meta keys for display
     const ignoreKeys = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab'];
     if (!ignoreKeys.includes(event.key)) {
         addKeyBubble(event.key);
     }
     
-    // Записываем событие
+    // Record event
     state.keystrokeEvents.push({
         type: 'keydown',
         key: event.key,
@@ -139,7 +139,7 @@ function handleKeyDown(event) {
         keyCode: event.keyCode
     });
     
-    // Подсчет backspace
+    // Backspace counter
     if (event.key === 'Backspace') {
         state.backspaceCount += 1;
     }
@@ -163,14 +163,14 @@ function handleInput(event) {
     const prevText = state.lastText;
     const newText = event.target.value;
     
-    // Детект изменений (упрощенно предполагаем ввод в конец)
+    // Change detection (assume append at the end for simplicity)
     if (newText.length > prevText.length) {
         const added = newText.slice(prevText.length);
         for (let i = 0; i < added.length; i++) {
             const ch = added[i];
             const pos = prevText.length + i;
             const expected = state.referenceText[pos] || '';
-            const isLetter = ch.length === 1 && /[a-zA-Zа-яА-Я]/.test(ch);
+            const isLetter = ch.length === 1 && /[a-zA-Z]/.test(ch);
             const letterKey = isLetter ? ch.toUpperCase() : null;
             
             // Track per-letter totals
@@ -185,15 +185,14 @@ function handleInput(event) {
             }
         }
     } else if (newText.length < prevText.length) {
-        // Удаление (backspace) — не уменьшаем счетчики ошибок/ввода, чтобы ошибки не исчезали
-        // Нам важна история ошибок, а не только финальная строка
+        // Deletions don't reduce counters; we preserve error history
     } else {
-        // Замена символа той же длины
+        // Replacement of same-length segment
         for (let i = 0; i < newText.length; i++) {
             if (newText[i] !== prevText[i]) {
                 const ch = newText[i];
                 const expected = state.referenceText[i] || '';
-                const isLetter = ch.length === 1 && /[a-zA-Zа-яА-Я]/.test(ch);
+                const isLetter = ch.length === 1 && /[a-zA-Z]/.test(ch);
                 const letterKey = isLetter ? ch.toUpperCase() : null;
                 if (letterKey) ensureLetterStats(letterKey).total += 1;
                 state.typedCharsCount += 1;
@@ -211,7 +210,7 @@ function handleInput(event) {
     state.currentText = newText;
     state.lastText = newText;
     
-    // Автостоп при полном совпадении с эталонным текстом
+    // Autostop when text fully matches reference
     if (!state.completed && state.currentText === state.referenceText) {
         state.completed = true;
         state.isTyping = false;
@@ -234,7 +233,7 @@ function addKeyBubble(key) {
     const bubble = document.createElement('div');
     bubble.className = 'key-bubble';
     
-    // Отображение специальных символов
+    // Special symbols display
     const displayKey = {
         ' ': 'Space',
         'Enter': '↵',
@@ -250,7 +249,7 @@ function addKeyBubble(key) {
     
     elements.keyBubbles.appendChild(bubble);
     
-    // Ограничиваем количество пузырьков
+    // Limit number of bubbles
     const bubbles = elements.keyBubbles.querySelectorAll('.key-bubble');
     if (bubbles.length > 20) {
         bubbles[0].remove();
@@ -258,7 +257,7 @@ function addKeyBubble(key) {
 }
 
 function updateRealtimeStats() {
-    // Скорость печати (символов в минуту)
+    // Typing speed (CPM)
     if (state.startTime && state.currentText.length > 0) {
         const endTs = state.endTime || Date.now();
         const elapsedMinutes = (endTs - state.startTime) / 60000;
@@ -266,7 +265,7 @@ function updateRealtimeStats() {
         elements.typingSpeed.textContent = cpm;
     }
     
-    // Средняя задержка между нажатиями
+    // Average latency
     const keydownEvents = state.keystrokeEvents.filter(e => e.type === 'keydown');
     if (keydownEvents.length > 1) {
         const latencies = [];
@@ -305,7 +304,7 @@ function updateUI() {
 }
 
 // ========================================
-// API взаимодействие
+// API interaction
 // ========================================
 
 async function checkAPIHealth() {
@@ -575,7 +574,7 @@ function showLoading(show) {
 }
 
 // ========================================
-// Утилиты
+// Utilities
 // ========================================
 
 function escapeHtml(text) {
@@ -585,20 +584,20 @@ function escapeHtml(text) {
 }
 
 // ========================================
-// Периодические обновления
+// Periodic updates
 // ========================================
 
-// Обновляем статистику системы каждые 10 секунд
+// Refresh system stats every 10s
 setInterval(loadSystemStats, 10000);
 
-// Обновляем unified results каждые 15 секунд
+// Refresh unified results every 15s
 setInterval(loadUnifiedResults, 15000);
 
-// Проверяем API каждые 30 секунд
+// Check API every 30s
 setInterval(checkAPIHealth, 30000);
 
 // ========================================
-// Запуск приложения
+// App bootstrap
 // ========================================
 
 document.addEventListener('DOMContentLoaded', init);
@@ -666,7 +665,7 @@ function updateFeaturesVisualizationRealtime() {
     const features = calculateRealtimeFeatures();
     
     if (!features) {
-        // Показываем пустое состояние
+        // Empty state
         elements.featuresGrid.innerHTML = `
             <div class="feature-item">
                 <span class="feature-label">Dwell Time</span>
@@ -748,7 +747,7 @@ function updateFeaturesVisualizationRealtime() {
     elements.featuresGrid.innerHTML = html;
 }
 
-// Дополнительная визуализация признаков (для статических данных)
+// Additional features visualization (static data)
 function updateFeaturesVisualization(features) {
     if (!features) return;
     
@@ -825,10 +824,10 @@ async function loadExistingUsers() {
         if (data.success) {
             const select = elements.existingUserSelect;
             
-            // Сохраняем текущий выбор
+            // Preserve current selection
             const currentValue = select.value;
             
-            // Очищаем и добавляем опции
+            // Clear and add options
             select.innerHTML = '<option value="">Select a user...</option>';
             
             data.users.forEach(user => {
@@ -838,7 +837,7 @@ async function loadExistingUsers() {
                 select.appendChild(option);
             });
             
-            // Восстанавливаем выбор если возможно
+            // Restore selection if possible
             if (currentValue && data.users.some(u => u.username === currentValue)) {
                 select.value = currentValue;
             }
@@ -872,7 +871,7 @@ async function showUserDetails(username) {
         const features = user.averaged_features;
         const stats = user.variation_stats;
         
-        // Формируем HTML для модального окна
+        // Build modal HTML
         let html = `
             <div class="user-info-header">
                 <h3>👤 ${escapeHtml(username)}</h3>
@@ -883,7 +882,7 @@ async function showUserDetails(username) {
             <div class="param-grid">
         `;
         
-        // Основные параметры
+        // Main parameters
         const mainParams = [
             { key: 'dwell_mean', label: 'Dwell Time', unit: 'ms', category: 'timing' },
             { key: 'latency_mean', label: 'Inter-key Latency', unit: 'ms', category: 'timing' },
@@ -916,7 +915,7 @@ async function showUserDetails(username) {
         
         html += `</div>`;
         
-        // Дополнительная статистика
+        // Additional stats
         html += `
             <h4 style="margin: 2rem 0 1rem 0; color: var(--text-secondary);">📈 Detailed Statistics</h4>
             <div class="param-grid">
@@ -947,7 +946,7 @@ async function showUserDetails(username) {
             </div>
         `;
         
-        // Информация о создании
+        // Creation info
         html += `
             <div style="margin-top: 2rem; padding: 1rem; background: var(--background); border-radius: var(--radius-md); font-size: 0.875rem; color: var(--text-muted);">
                 <div>Created: ${new Date(user.created_at).toLocaleString('en-US')}</div>
@@ -974,7 +973,7 @@ function closeUserDetailsModal() {
 // ========================================
 
 async function loadUnifiedResults() {
-    // Если мы в режиме идентификации, не перезаписываем результаты
+    // Do not overwrite identify results while in identify mode
     if (state.isIdentifyMode) {
         return;
     }
@@ -985,7 +984,7 @@ async function loadUnifiedResults() {
         
         const data = await response.json();
         
-        // Обновляем заголовок для обычного режима
+        // Update title for default mode
         elements.resultsTitle.textContent = '👥 Registered Users';
         elements.resultsSubtitle.textContent = 'Click to view details';
         
@@ -1000,12 +999,12 @@ async function loadUnifiedResults() {
             return;
         }
         
-        // Сортируем пользователей по последнему обновлению
+        // Sort users by last update
         const users = data.users.sort((a, b) => {
             return new Date(b.last_updated || b.created_at) - new Date(a.last_updated || a.created_at);
         });
         
-        // Формируем HTML для списка пользователей
+        // Render users list
         let html = '';
         users.forEach(user => {
             const initials = user.username.substring(0, 2).toUpperCase();
@@ -1031,7 +1030,7 @@ async function loadUnifiedResults() {
         
         elements.unifiedResults.innerHTML = html;
         
-        // Добавляем обработчики клика
+        // Add click handlers
         const userItems = elements.unifiedResults.querySelectorAll('.user-item');
         userItems.forEach(item => {
             item.addEventListener('click', () => {
@@ -1066,7 +1065,7 @@ function getTimeAgo(date) {
 }
 
 // ========================================
-// Виртуальная клавиатура с пом-буквенной статистикой
+// Virtual keyboard with per-letter stats
 // ========================================
 
 const KEYBOARD_LAYOUT = [
@@ -1095,14 +1094,14 @@ function injectVirtualKeyboardStyles() {
 }
 
 function mountVirtualKeyboard() {
-    // Вставляем под блоком "Recent Keystrokes"
+    // Mount under "Recent Keystrokes"
     const typingPanelCard = document.querySelector('.typing-panel .card');
     if (!typingPanelCard) return;
     
     const container = document.createElement('div');
     container.className = 'virtual-keyboard';
     
-    // Легенда
+    // Legend
     const legend = document.createElement('div');
     legend.className = 'vk-legend';
     legend.innerHTML = `

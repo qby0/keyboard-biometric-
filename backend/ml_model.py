@@ -13,7 +13,7 @@ class KeystrokeBiometrics:
     """
     
     def __init__(self):
-        # Глобальный скейлер для нормализации признаков; обучается на всех доступных вектрах
+        # Global scaler for feature normalization; trained on all available vectors
         self.scaler = StandardScaler()
         self.feature_names = [
             'dwell_mean', 'dwell_std', 'dwell_median', 'dwell_min', 'dwell_max',
@@ -25,9 +25,9 @@ class KeystrokeBiometrics:
     
     def train(self, users_data: Dict):
         """
-        Обучение скейлера на всех доступных образцах пользователей.
-        Distance-based идентификация не требует обучаемой модели, но
-        корректная нормализация признаков повышает качество сравнения.
+        Fit scaler on all available user samples.
+        Distance-based identification does not require a trainable model,
+        but proper normalization improves comparisons.
         """
         if not users_data:
             return
@@ -38,7 +38,7 @@ class KeystrokeBiometrics:
                 vectors.append(self._features_to_vector(features))
 
         if len(vectors) < 2:
-            # Недостаточно данных для устойчивой нормализации
+            # Not enough data for stable normalization
             return
 
         X = np.array(vectors)
@@ -55,21 +55,21 @@ class KeystrokeBiometrics:
         
         feature_vector = self._features_to_vector(features)
         
-        # Собираем все векторы для потенциальной подстройки скейлера
+        # Collect all vectors so scaler can be consistent
         all_vectors = [feature_vector]
         for _, user_info in users_data.items():
             all_vectors.extend([self._features_to_vector(f) for f in user_info.get('features', [])])
 
         all_vectors_array = np.array(all_vectors)
 
-        # Если скейлер ещё не обучен (первый запуск) — обучим на всех доступных векторах
+        # If scaler not fitted yet (first run) — fit on available vectors
         if not hasattr(self.scaler, 'mean_'):
             try:
                 self.scaler.fit(all_vectors_array)
             except Exception:
                 pass
 
-        # Нормализуем тестовый и пользовательские векторы одним и тем же скейлером
+        # Normalize test and user vectors with the same scaler
         all_vectors_normalized = self.scaler.transform(all_vectors_array)
         test_vector_normalized = all_vectors_normalized[0]
         
@@ -246,7 +246,7 @@ class KeystrokeBiometrics:
         return float(confidence)
     
     def save_model(self, filepath: str):
-        """Сохранить параметры нормализации (скейлер) и имена признаков"""
+        """Save normalization params (scaler) and feature names"""
         model_data = {
             'scaler': self.scaler,
             'feature_names': self.feature_names
@@ -255,7 +255,7 @@ class KeystrokeBiometrics:
             pickle.dump(model_data, f)
     
     def load_model(self, filepath: str):
-        """Загрузить сохранённый скейлер и имена признаков"""
+        """Load saved scaler and feature names"""
         if not os.path.exists(filepath):
             return False
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Тестовый скрипт для проверки API Keystroke Biometrics
+Test script for Keystroke Biometrics API
 """
 
 import requests
@@ -18,29 +18,29 @@ def print_header(text):
 
 
 def test_health():
-    """Тест проверки здоровья API"""
-    print_header("🏥 Проверка здоровья API")
+    """API health check test"""
+    print_header("🏥 API Health Check")
     try:
         response = requests.get(f"{API_BASE}/health", timeout=5)
         if response.status_code == 200:
             data = response.json()
-            print(f"✅ API работает!")
-            print(f"📅 Время: {data['timestamp']}")
+            print(f"✅ API is up!")
+            print(f"📅 Time: {data['timestamp']}")
             return True
         else:
-            print(f"❌ API вернул код: {response.status_code}")
+            print(f"❌ API returned code: {response.status_code}")
             return False
     except requests.exceptions.ConnectionError:
-        print("❌ Не удалось подключиться к API")
-        print("💡 Убедитесь, что backend запущен: ./start_backend.sh")
+        print("❌ Failed to connect to API")
+        print("💡 Make sure backend is running: ./start_backend.sh")
         return False
     except Exception as e:
-        print(f"❌ Ошибка: {e}")
+        print(f"❌ Error: {e}")
         return False
 
 
 def generate_test_keystroke_data(text, base_delay=100, variance=20):
-    """Генерация тестовых данных нажатий клавиш"""
+    """Generate synthetic keystroke events"""
     events = []
     timestamp = 1000
     
@@ -54,7 +54,7 @@ def generate_test_keystroke_data(text, base_delay=100, variance=20):
             "keyCode": ord(char)
         })
         
-        # keyup (через случайное время удержания)
+        # keyup (after randomized dwell time)
         dwell_time = base_delay + (hash(char) % variance)
         timestamp += dwell_time
         
@@ -66,7 +66,7 @@ def generate_test_keystroke_data(text, base_delay=100, variance=20):
             "keyCode": ord(char)
         })
         
-        # Задержка до следующей клавиши
+        # delay before next key
         flight_time = base_delay + ((hash(char) * 2) % variance)
         timestamp += flight_time
     
@@ -74,21 +74,21 @@ def generate_test_keystroke_data(text, base_delay=100, variance=20):
 
 
 def test_register():
-    """Тест регистрации пользователей"""
-    print_header("📝 Регистрация тестовых пользователей")
+    """User registration test"""
+    print_header("📝 Register test users")
     
     test_users = [
-        {"name": "Alice", "delay": 100, "variance": 20},  # Быстрая печать
-        {"name": "Bob", "delay": 150, "variance": 30},    # Средняя скорость
-        {"name": "Charlie", "delay": 200, "variance": 40}, # Медленная печать
+        {"name": "Alice", "delay": 100, "variance": 20},  # fast typing
+        {"name": "Bob", "delay": 150, "variance": 30},    # medium speed
+        {"name": "Charlie", "delay": 200, "variance": 40}, # slow typing
     ]
     
     reference_text = "The quick brown fox jumps over the lazy dog."
     
     for user in test_users:
-        print(f"\n👤 Регистрация пользователя: {user['name']}")
+        print(f"\n👤 Registering user: {user['name']}")
         
-        # Создаем несколько образцов для каждого пользователя
+        # Create multiple samples per user
         for i in range(3):
             keystroke_events = generate_test_keystroke_data(
                 reference_text,
@@ -112,26 +112,26 @@ def test_register():
                 if response.status_code == 200:
                     data = response.json()
                     if data.get('success'):
-                        print(f"  ✅ Образец {i+1}/3: {data.get('message')}")
+                        print(f"  ✅ Sample {i+1}/3: {data.get('message')}")
                     else:
-                        print(f"  ❌ Ошибка: {data.get('error')}")
+                        print(f"  ❌ Error: {data.get('error')}")
                 else:
                     print(f"  ❌ HTTP {response.status_code}")
             
             except Exception as e:
-                print(f"  ❌ Ошибка: {e}")
+                print(f"  ❌ Error: {e}")
             
-            time.sleep(0.5)  # Небольшая задержка
+            time.sleep(0.5)  # small delay
 
 
 def test_identify():
-    """Тест идентификации"""
-    print_header("🔍 Тест идентификации")
+    """Identification test"""
+    print_header("🔍 Identification test")
     
     reference_text = "The quick brown fox jumps over the lazy dog."
     
-    # Симулируем Alice
-    print("\n🧪 Тест 1: Симуляция стиля Alice (быстрая печать)")
+    # Simulate Alice
+    print("\n🧪 Test 1: Simulate Alice (fast typing)")
     events = generate_test_keystroke_data(reference_text, base_delay=100, variance=20)
     
     payload = {
@@ -146,20 +146,20 @@ def test_identify():
             if data.get('success'):
                 matches = data.get('matches', [])
                 if matches:
-                    print(f"\n📊 Топ-{len(matches)} совпадений:")
+                    print(f"\n📊 Top-{len(matches)} matches:")
                     for i, match in enumerate(matches, 1):
                         print(f"  {i}. {match['username']}: "
                               f"{match['similarity']:.1f}% "
-                              f"(уверенность: {match['confidence']:.1f}%)")
+                              f"(confidence: {match['confidence']:.1f}%)")
                 else:
-                    print("  ℹ️  Совпадений не найдено")
+                    print("  ℹ️  No matches found")
             else:
-                print(f"  ❌ Ошибка: {data.get('error')}")
+                print(f"  ❌ Error: {data.get('error')}")
     except Exception as e:
-        print(f"  ❌ Ошибка: {e}")
+        print(f"  ❌ Error: {e}")
     
-    # Симулируем Charlie
-    print("\n🧪 Тест 2: Симуляция стиля Charlie (медленная печать)")
+    # Simulate Charlie
+    print("\n🧪 Test 2: Simulate Charlie (slow typing)")
     events = generate_test_keystroke_data(reference_text, base_delay=200, variance=40)
     
     payload = {
@@ -174,18 +174,18 @@ def test_identify():
             if data.get('success'):
                 matches = data.get('matches', [])
                 if matches:
-                    print(f"\n📊 Топ-{len(matches)} совпадений:")
+                    print(f"\n📊 Top-{len(matches)} matches:")
                     for i, match in enumerate(matches, 1):
                         print(f"  {i}. {match['username']}: "
                               f"{match['similarity']:.1f}% "
-                              f"(уверенность: {match['confidence']:.1f}%)")
+                              f"(confidence: {match['confidence']:.1f}%)")
     except Exception as e:
-        print(f"  ❌ Ошибка: {e}")
+        print(f"  ❌ Error: {e}")
 
 
 def test_stats():
-    """Тест получения статистики"""
-    print_header("📊 Статистика системы")
+    """System stats test"""
+    print_header("📊 System statistics")
     
     try:
         response = requests.get(f"{API_BASE}/stats", timeout=5)
@@ -193,18 +193,18 @@ def test_stats():
             data = response.json()
             if data.get('success'):
                 stats = data['stats']
-                print(f"👥 Всего пользователей: {stats['total_users']}")
-                print(f"📝 Всего образцов: {stats['total_samples']}")
-                print(f"📈 Среднее образцов на пользователя: {stats['avg_samples_per_user']:.1f}")
+                print(f"👥 Total users: {stats['total_users']}")
+                print(f"📝 Total samples: {stats['total_samples']}")
+                print(f"📈 Avg samples per user: {stats['avg_samples_per_user']:.1f}")
         else:
             print(f"❌ HTTP {response.status_code}")
     except Exception as e:
-        print(f"❌ Ошибка: {e}")
+        print(f"❌ Error: {e}")
 
 
 def test_users():
-    """Тест получения списка пользователей"""
-    print_header("👥 Список пользователей")
+    """Users list test"""
+    print_header("👥 Registered Users")
     
     try:
         response = requests.get(f"{API_BASE}/users", timeout=5)
@@ -212,48 +212,48 @@ def test_users():
             data = response.json()
             if data.get('success'):
                 users = data['users']
-                print(f"\nВсего пользователей: {data['total']}\n")
+                print(f"\nTotal users: {data['total']}\n")
                 for user in users:
                     print(f"  • {user['username']}")
-                    print(f"    Образцов: {user['samples_count']}")
-                    print(f"    Создан: {user['created_at'][:10]}")
+                    print(f"    Samples: {user['samples_count']}")
+                    print(f"    Created: {user['created_at'][:10]}")
                     print()
     except Exception as e:
-        print(f"❌ Ошибка: {e}")
+        print(f"❌ Error: {e}")
 
 
 def main():
     print("\n" + "="*60)
-    print("  🔐 Keystroke Biometrics - Тест API")
+    print("  🔐 Keystroke Biometrics - API Test")
     print("="*60)
     
-    # Проверка здоровья
+    # Health check
     if not test_health():
         return
     
     time.sleep(1)
     
-    # Регистрация пользователей
+    # Registration
     test_register()
     time.sleep(1)
     
-    # Идентификация
+    # Identification
     test_identify()
     time.sleep(1)
     
-    # Статистика
+    # Statistics
     test_stats()
     time.sleep(1)
     
-    # Список пользователей
+    # Users list
     test_users()
     
     print("\n" + "="*60)
-    print("  ✅ Все тесты завершены!")
+    print("  ✅ All tests completed!")
     print("="*60 + "\n")
     
-    print("💡 Откройте веб-интерфейс: http://localhost:8000")
-    print("   (Запустите: ./start_frontend.sh)\n")
+    print("💡 Open web UI: http://localhost:8000")
+    print("   (Run: ./start_frontend.sh)\n")
 
 
 if __name__ == "__main__":
