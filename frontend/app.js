@@ -217,7 +217,7 @@ function handleInput(event) {
         state.isTyping = false;
         state.endTime = Date.now();
         elements.typingInput.disabled = true;
-        showToast('Completed. Timer stopped.', 'success');
+        showToast('✅ Completed. Timer stopped.', 'success');
     }
     
     updateAccuracy();
@@ -372,7 +372,7 @@ async function handleRegister() {
         
         if (data.success) {
             showToast(
-                `Pattern registered. Samples: ${data.samples_count}`,
+                `✓ Pattern registered! Samples: ${data.samples_count}`,
                 'success'
             );
             state.isIdentifyMode = false; // Переключаемся обратно к списку пользователей
@@ -414,7 +414,7 @@ async function handleIdentify() {
         if (data.success) {
             displayUnifiedResults(data.matches, true);
             if (data.matches.length > 0) {
-                showToast('Identification complete.', 'success');
+                showToast('🔍 Identification complete!', 'success');
             } else {
                 showToast('No matches found. Register your pattern.', 'info');
             }
@@ -481,7 +481,7 @@ function displayUnifiedResults(matches, isIdentifyMode = false) {
         if (!matches || matches.length === 0) {
             elements.unifiedResults.innerHTML = `
                 <div class="empty-state">
-                    <div class="empty-icon"></div>
+                    <div class="empty-icon">👤</div>
                     <p>No matches found</p>
                     <p class="empty-hint">Try registering your pattern</p>
                 </div>
@@ -1014,7 +1014,7 @@ async function loadUnifiedResults() {
             const timeAgo = getTimeAgo(updateDate);
             
             html += `
-            <div class="user-item" data-username="${escapeHtml(user.username)}">
+                <div class="user-item" data-username="${escapeHtml(user.username)}">
                     <div class="user-item-info">
                         <div class="user-item-avatar">${initials}</div>
                         <div class="user-item-details">
@@ -1023,7 +1023,7 @@ async function loadUnifiedResults() {
                         </div>
                     </div>
                     <div class="user-item-stats">
-                        <span class="user-stat-badge">${user.samples_count} samples</span>
+                        <span class="user-stat-badge">📊 ${user.samples_count} samples</span>
                     </div>
                 </div>
             `;
