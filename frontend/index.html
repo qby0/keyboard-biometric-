@@ -9,29 +9,6 @@
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="logo">
-                <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <rect width="40" height="40" rx="8" fill="url(#gradient)"/>
-                    <path d="M12 15h16M12 20h16M12 25h10" stroke="white" stroke-width="2" stroke-linecap="round"/>
-                    <defs>
-                        <linearGradient id="gradient" x1="0" y1="0" x2="40" y2="40">
-                            <stop offset="0%" stop-color="#667eea"/>
-                            <stop offset="100%" stop-color="#764ba2"/>
-                        </linearGradient>
-                    </defs>
-                </svg>
-                <h1>Keystroke Biometrics</h1>
-            </div>
-            <div class="stats-mini">
-                <div class="stat-item">
-                    <span class="stat-value" id="totalUsers">0</span>
-                    <span class="stat-label">Users</span>
-                </div>
-            </div>
-        </header>
-
         <div class="main-content">
             <!-- Left Panel: Typing Test -->
             <div class="typing-panel">
@@ -127,30 +104,14 @@
 
             <!-- Right Panel: Results -->
             <div class="results-panel">
-                <!-- Top Matches -->
+                <!-- Unified Users & Matches Panel -->
                 <div class="card">
                     <div class="card-header">
-                        <h2>🏆 Top Matches</h2>
-                        <p class="subtitle">Users with similar typing patterns</p>
+                        <h2 id="resultsTitle">👥 Users & Matches</h2>
+                        <p class="subtitle" id="resultsSubtitle">Registered users and identification results</p>
                     </div>
                     
-                    <div class="matches-list" id="matchesList">
-                        <div class="empty-state">
-                            <div class="empty-icon">👤</div>
-                            <p>No results yet</p>
-                            <p class="empty-hint">Complete typing and press "Identify"</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Registered Users List -->
-                <div class="card">
-                    <div class="card-header">
-                        <h2>👥 Registered Users</h2>
-                        <p class="subtitle">Click to view details</p>
-                    </div>
-                    
-                    <div class="users-list" id="usersList">
+                    <div class="unified-results" id="unifiedResults">
                         <div class="empty-state">
                             <div class="empty-icon">👤</div>
                             <p>No users yet</p>

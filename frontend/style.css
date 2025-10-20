@@ -421,13 +421,9 @@ select.username-input {
    Matches List
    ======================================== */
 
-.matches-list {
+.unified-results {
     min-height: 200px;
-}
-
-.users-list {
-    min-height: 150px;
-    max-height: 400px;
+    max-height: 500px;
     overflow-y: auto;
 }
 

@@ -7,10 +7,22 @@ const API_BASE_URL = 'http://localhost:5000/api';
 const state = {
     keystrokeEvents: [],
     startTime: null,
+    endTime: null,
     isTyping: false,
     currentText: '',
     referenceText: '',
-    features: null
+    features: null,
+    // Cumulative accuracy tracking
+    lastText: '',
+    typedCharsCount: 0,
+    correctCharsCount: 0,
+    errorsTotal: 0,
+    backspaceCount: 0,
+    perLetterStats: {}, // { 'A': { total: n, errors: m } }
+    completed: false,
+    // UI state
+    isIdentifyMode: false,
+    lastMatches: []
 };
 
 // ========================================
@@ -28,12 +40,12 @@ const elements = {
     registerBtn: document.getElementById('registerBtn'),
     identifyBtn: document.getElementById('identifyBtn'),
     resetBtn: document.getElementById('resetBtn'),
-    matchesList: document.getElementById('matchesList'),
-    usersList: document.getElementById('usersList'),
+    unifiedResults: document.getElementById('unifiedResults'),
+    resultsTitle: document.getElementById('resultsTitle'),
+    resultsSubtitle: document.getElementById('resultsSubtitle'),
     typingSpeed: document.getElementById('typingSpeed'),
     avgLatency: document.getElementById('avgLatency'),
     accuracy: document.getElementById('accuracy'),
-    totalUsers: document.getElementById('totalUsers'),
     systemTotalUsers: document.getElementById('systemTotalUsers'),
     systemTotalSamples: document.getElementById('systemTotalSamples'),
     systemAvgSamples: document.getElementById('systemAvgSamples'),
@@ -55,10 +67,12 @@ let isExistingUser = false;
 function init() {
     state.referenceText = elements.referenceText.textContent.trim();
     setupEventListeners();
+    injectVirtualKeyboardStyles();
+    mountVirtualKeyboard();
     checkAPIHealth();
     loadSystemStats();
     loadExistingUsers();
-    loadRegisteredUsers(); // Load registered users list
+    loadUnifiedResults(); // Load unified results
     updateFeaturesVisualizationRealtime(); // Initialize features panel
     updateUI();
 }
@@ -102,10 +116,12 @@ function setupEventListeners() {
 function handleKeyDown(event) {
     const timestamp = Date.now();
     
-    // Начало набора
+    // Начало набора (автостарт таймера)
     if (!state.isTyping) {
         state.isTyping = true;
         state.startTime = timestamp;
+        state.endTime = null;
+        state.completed = false;
     }
     
     // Игнорируем специальные клавиши для отображения
@@ -123,6 +139,11 @@ function handleKeyDown(event) {
         keyCode: event.keyCode
     });
     
+    // Подсчет backspace
+    if (event.key === 'Backspace') {
+        state.backspaceCount += 1;
+    }
+    
     updateRealtimeStats();
 }
 
@@ -139,10 +160,70 @@ function handleKeyUp(event) {
 }
 
 function handleInput(event) {
-    state.currentText = event.target.value;
+    const prevText = state.lastText;
+    const newText = event.target.value;
+    
+    // Детект изменений (упрощенно предполагаем ввод в конец)
+    if (newText.length > prevText.length) {
+        const added = newText.slice(prevText.length);
+        for (let i = 0; i < added.length; i++) {
+            const ch = added[i];
+            const pos = prevText.length + i;
+            const expected = state.referenceText[pos] || '';
+            const isLetter = ch.length === 1 && /[a-zA-Zа-яА-Я]/.test(ch);
+            const letterKey = isLetter ? ch.toUpperCase() : null;
+            
+            // Track per-letter totals
+            if (letterKey) ensureLetterStats(letterKey).total += 1;
+            
+            state.typedCharsCount += 1;
+            if (ch === expected) {
+                state.correctCharsCount += 1;
+            } else {
+                state.errorsTotal += 1;
+                if (letterKey) ensureLetterStats(letterKey).errors += 1;
+            }
+        }
+    } else if (newText.length < prevText.length) {
+        // Удаление (backspace) — не уменьшаем счетчики ошибок/ввода, чтобы ошибки не исчезали
+        // Нам важна история ошибок, а не только финальная строка
+    } else {
+        // Замена символа той же длины
+        for (let i = 0; i < newText.length; i++) {
+            if (newText[i] !== prevText[i]) {
+                const ch = newText[i];
+                const expected = state.referenceText[i] || '';
+                const isLetter = ch.length === 1 && /[a-zA-Zа-яА-Я]/.test(ch);
+                const letterKey = isLetter ? ch.toUpperCase() : null;
+                if (letterKey) ensureLetterStats(letterKey).total += 1;
+                state.typedCharsCount += 1;
+                if (ch === expected) {
+                    state.correctCharsCount += 1;
+                } else {
+                    state.errorsTotal += 1;
+                    if (letterKey) ensureLetterStats(letterKey).errors += 1;
+                }
+                break;
+            }
+        }
+    }
+    
+    state.currentText = newText;
+    state.lastText = newText;
+    
+    // Автостоп при полном совпадении с эталонным текстом
+    if (!state.completed && state.currentText === state.referenceText) {
+        state.completed = true;
+        state.isTyping = false;
+        state.endTime = Date.now();
+        elements.typingInput.disabled = true;
+        showToast('✅ Completed. Timer stopped.', 'success');
+    }
+    
     updateAccuracy();
     updateButtonStates();
     updateFeaturesVisualizationRealtime();
+    updateVirtualKeyboard();
 }
 
 // ========================================
@@ -179,8 +260,9 @@ function addKeyBubble(key) {
 function updateRealtimeStats() {
     // Скорость печати (символов в минуту)
     if (state.startTime && state.currentText.length > 0) {
-        const elapsedMinutes = (Date.now() - state.startTime) / 60000;
-        const cpm = Math.round(state.currentText.length / elapsedMinutes);
+        const endTs = state.endTime || Date.now();
+        const elapsedMinutes = (endTs - state.startTime) / 60000;
+        const cpm = Math.round(state.currentText.length / Math.max(elapsedMinutes, 1e-6));
         elements.typingSpeed.textContent = cpm;
     }
     
@@ -197,21 +279,11 @@ function updateRealtimeStats() {
 }
 
 function updateAccuracy() {
-    if (state.currentText.length === 0) {
+    if (state.typedCharsCount === 0) {
         elements.accuracy.textContent = '0%';
         return;
     }
-    
-    let correct = 0;
-    const minLength = Math.min(state.currentText.length, state.referenceText.length);
-    
-    for (let i = 0; i < minLength; i++) {
-        if (state.currentText[i] === state.referenceText[i]) {
-            correct++;
-        }
-    }
-    
-    const accuracy = Math.round((correct / minLength) * 100);
+    const accuracy = Math.max(0, Math.min(100, Math.round((state.correctCharsCount / state.typedCharsCount) * 100)));
     elements.accuracy.textContent = `${accuracy}%`;
 }
 
@@ -257,7 +329,6 @@ async function loadSystemStats() {
         
         const data = await response.json();
         if (data.success) {
-            elements.totalUsers.textContent = data.stats.total_users;
             elements.systemTotalUsers.textContent = data.stats.total_users;
             elements.systemTotalSamples.textContent = data.stats.total_samples;
             elements.systemAvgSamples.textContent = data.stats.avg_samples_per_user.toFixed(1);
@@ -304,9 +375,10 @@ async function handleRegister() {
                 `✓ Pattern registered! Samples: ${data.samples_count}`,
                 'success'
             );
+            state.isIdentifyMode = false; // Переключаемся обратно к списку пользователей
             loadSystemStats();
             loadExistingUsers();
-            loadRegisteredUsers(); // Update users list
+            loadUnifiedResults(); // Update unified results
         } else {
             showToast(`Error: ${data.error}`, 'error');
         }
@@ -340,7 +412,7 @@ async function handleIdentify() {
         const data = await response.json();
         
         if (data.success) {
-            displayMatches(data.matches);
+            displayUnifiedResults(data.matches, true);
             if (data.matches.length > 0) {
                 showToast('🔍 Identification complete!', 'success');
             } else {
@@ -359,9 +431,20 @@ async function handleIdentify() {
 function handleReset() {
     state.keystrokeEvents = [];
     state.startTime = null;
+    state.endTime = null;
     state.isTyping = false;
     state.currentText = '';
+    state.lastText = '';
+    state.typedCharsCount = 0;
+    state.correctCharsCount = 0;
+    state.errorsTotal = 0;
+    state.backspaceCount = 0;
+    state.perLetterStats = {};
+    state.completed = false;
+    state.isIdentifyMode = false;
+    state.lastMatches = [];
     
+    elements.typingInput.disabled = false;
     elements.typingInput.value = '';
     elements.keyBubbles.innerHTML = '';
     elements.typingSpeed.textContent = '0';
@@ -370,6 +453,10 @@ function handleReset() {
     
     // Очищаем панель признаков
     updateFeaturesVisualizationRealtime();
+    updateVirtualKeyboard(true);
+    
+    // Возвращаемся к списку пользователей
+    loadUnifiedResults();
     
     // Не очищаем имя пользователя, чтобы было удобнее
     
@@ -381,50 +468,80 @@ function handleReset() {
 // Отображение результатов
 // ========================================
 
-function displayMatches(matches) {
-    if (!matches || matches.length === 0) {
-        elements.matchesList.innerHTML = `
-            <div class="empty-state">
-                <div class="empty-icon">👤</div>
-                <p>No matches found</p>
-                <p class="empty-hint">Try registering your pattern</p>
-            </div>
-        `;
-        return;
+function displayUnifiedResults(matches, isIdentifyMode = false) {
+    // Сохраняем режим и результаты в state
+    state.isIdentifyMode = isIdentifyMode;
+    state.lastMatches = matches || [];
+    
+    if (isIdentifyMode) {
+        // Режим идентификации - показываем matches
+        elements.resultsTitle.textContent = '🏆 Identification Results';
+        elements.resultsSubtitle.innerHTML = 'Users with similar typing patterns • <a href="#" id="backToUsers" style="color: var(--primary); text-decoration: none; font-weight: 600;">← Back to users</a>';
+        
+        if (!matches || matches.length === 0) {
+            elements.unifiedResults.innerHTML = `
+                <div class="empty-state">
+                    <div class="empty-icon">👤</div>
+                    <p>No matches found</p>
+                    <p class="empty-hint">Try registering your pattern</p>
+                </div>
+            `;
+            // Добавляем обработчик на кнопку возврата
+            setTimeout(() => {
+                const backBtn = document.getElementById('backToUsers');
+                if (backBtn) backBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    state.isIdentifyMode = false;
+                    loadUnifiedResults();
+                });
+            }, 0);
+            return;
+        }
+        
+        elements.unifiedResults.innerHTML = '';
+        
+        matches.forEach((match, index) => {
+            const matchItem = document.createElement('div');
+            matchItem.className = 'match-item';
+            
+            const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : 'default';
+            
+            matchItem.innerHTML = `
+                <div class="match-header">
+                    <div class="match-rank">
+                        <div class="rank-badge ${rankClass}">${index + 1}</div>
+                        <span class="match-username">${escapeHtml(match.username)}</span>
+                    </div>
+                    <div class="similarity-badge">${Math.round(match.similarity)}%</div>
+                </div>
+                <div class="match-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${match.similarity}%"></div>
+                    </div>
+                </div>
+                <div class="match-info">
+                    <span>Samples: ${match.samples_count}</span>
+                    <span>Confidence: ${Math.round(match.confidence)}%</span>
+                </div>
+            `;
+            
+            matchItem.addEventListener('click', () => showUserDetails(match.username));
+            elements.unifiedResults.appendChild(matchItem);
+        });
+        
+        // Добавляем обработчик на кнопку возврата
+        setTimeout(() => {
+            const backBtn = document.getElementById('backToUsers');
+            if (backBtn) backBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                state.isIdentifyMode = false;
+                loadUnifiedResults();
+            });
+        }, 0);
+    } else {
+        // Обычный режим - показываем зарегистрированных пользователей
+        loadUnifiedResults();
     }
-    
-    elements.matchesList.innerHTML = '';
-    
-    matches.forEach((match, index) => {
-        const matchItem = document.createElement('div');
-        matchItem.className = 'match-item';
-        
-        const rankClass = index === 0 ? 'gold' : index === 1 ? 'silver' : index === 2 ? 'bronze' : 'default';
-        
-        matchItem.innerHTML = `
-            <div class="match-header">
-                <div class="match-rank">
-                    <div class="rank-badge ${rankClass}">${index + 1}</div>
-                    <span class="match-username">${escapeHtml(match.username)}</span>
-                </div>
-                <div class="similarity-badge">${Math.round(match.similarity)}%</div>
-            </div>
-            <div class="match-progress">
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: ${match.similarity}%"></div>
-                </div>
-            </div>
-            <div class="match-info">
-                <span>Samples: ${match.samples_count}</span>
-                <span>Confidence: ${Math.round(match.confidence)}%</span>
-            </div>
-        `;
-        
-        // Добавляем обработчик клика для просмотра деталей
-        matchItem.addEventListener('click', () => showUserDetails(match.username));
-        
-        elements.matchesList.appendChild(matchItem);
-    });
 }
 
 // ========================================
@@ -474,8 +591,8 @@ function escapeHtml(text) {
 // Обновляем статистику системы каждые 10 секунд
 setInterval(loadSystemStats, 10000);
 
-// Обновляем список пользователей каждые 15 секунд
-setInterval(loadRegisteredUsers, 15000);
+// Обновляем unified results каждые 15 секунд
+setInterval(loadUnifiedResults, 15000);
 
 // Проверяем API каждые 30 секунд
 setInterval(checkAPIHealth, 30000);
@@ -853,17 +970,27 @@ function closeUserDetailsModal() {
 }
 
 // ========================================
-// Registered Users List
+// Unified Results List (Users & Matches)
 // ========================================
 
-async function loadRegisteredUsers() {
+async function loadUnifiedResults() {
+    // Если мы в режиме идентификации, не перезаписываем результаты
+    if (state.isIdentifyMode) {
+        return;
+    }
+    
     try {
         const response = await fetch(`${API_BASE_URL}/users`);
         if (!response.ok) return;
         
         const data = await response.json();
+        
+        // Обновляем заголовок для обычного режима
+        elements.resultsTitle.textContent = '👥 Registered Users';
+        elements.resultsSubtitle.textContent = 'Click to view details';
+        
         if (!data.success || !data.users || data.users.length === 0) {
-            elements.usersList.innerHTML = `
+            elements.unifiedResults.innerHTML = `
                 <div class="empty-state">
                     <div class="empty-icon">👤</div>
                     <p>No users yet</p>
@@ -902,10 +1029,10 @@ async function loadRegisteredUsers() {
             `;
         });
         
-        elements.usersList.innerHTML = html;
+        elements.unifiedResults.innerHTML = html;
         
         // Добавляем обработчики клика
-        const userItems = elements.usersList.querySelectorAll('.user-item');
+        const userItems = elements.unifiedResults.querySelectorAll('.user-item');
         userItems.forEach(item => {
             item.addEventListener('click', () => {
                 const username = item.getAttribute('data-username');
@@ -914,7 +1041,7 @@ async function loadRegisteredUsers() {
         });
         
     } catch (error) {
-        console.error('Failed to load registered users:', error);
+        console.error('Failed to load unified results:', error);
     }
 }
 
@@ -936,5 +1063,92 @@ function getTimeAgo(date) {
     if (days < 30) return `${Math.floor(days / 7)} wk ago`;
     
     return date.toLocaleDateString('en-US');
+}
+
+// ========================================
+// Виртуальная клавиатура с пом-буквенной статистикой
+// ========================================
+
+const KEYBOARD_LAYOUT = [
+    ['Q','W','E','R','T','Y','U','I','O','P'],
+    ['A','S','D','F','G','H','J','K','L'],
+    ['Z','X','C','V','B','N','M']
+];
+
+let keyboardRoot = null;
+let keyElements = {}; // {'A': HTMLElement}
+
+function injectVirtualKeyboardStyles() {
+    if (document.getElementById('vk-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'vk-styles';
+    style.textContent = `
+    .virtual-keyboard { margin-top: 16px; user-select: none; }
+    .vk-row { display: flex; gap: 6px; margin-bottom: 6px; }
+    .vk-key { flex: 1; min-width: 28px; padding: 8px 10px; text-align: center; border-radius: 6px; background: #232340; border: 1px solid #2d3748; color: #a0aec0; font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,0.25); transition: transform 120ms ease, background 200ms ease; }
+    .vk-key:hover { transform: translateY(-1px); }
+    .vk-key .vk-meta { display:block; font-size: 10px; font-weight: 600; color:#8b9bb5; margin-top: 2px; }
+    .vk-legend { display:flex; gap:12px; align-items:center; margin: 10px 2px 2px; font-size: 12px; color:#8b9bb5; }
+    .vk-chip { display:inline-block; padding: 2px 8px; border-radius: 999px; border:1px solid #2d3748; background:#1a1a2e; color:#a0aec0; }
+    `;
+    document.head.appendChild(style);
+}
+
+function mountVirtualKeyboard() {
+    // Вставляем под блоком "Recent Keystrokes"
+    const typingPanelCard = document.querySelector('.typing-panel .card');
+    if (!typingPanelCard) return;
+    
+    const container = document.createElement('div');
+    container.className = 'virtual-keyboard';
+    
+    // Легенда
+    const legend = document.createElement('div');
+    legend.className = 'vk-legend';
+    legend.innerHTML = `
+        <span class="vk-chip">Per-letter stats</span>
+        <span>Color: green (0% errors) → red (high error rate)</span>
+    `;
+    container.appendChild(legend);
+    
+    KEYBOARD_LAYOUT.forEach(row => {
+        const rowEl = document.createElement('div');
+        rowEl.className = 'vk-row';
+        row.forEach(k => {
+            const keyEl = document.createElement('div');
+            keyEl.className = 'vk-key';
+            keyEl.dataset.key = k;
+            keyEl.innerHTML = `${k}<span class="vk-meta">0% • 0/0</span>`;
+            rowEl.appendChild(keyEl);
+            keyElements[k] = keyEl;
+        });
+        container.appendChild(rowEl);
+    });
+    
+    typingPanelCard.appendChild(container);
+    keyboardRoot = container;
+}
+
+function ensureLetterStats(letter) {
+    if (!state.perLetterStats[letter]) state.perLetterStats[letter] = { total: 0, errors: 0 };
+    return state.perLetterStats[letter];
+}
+
+function updateVirtualKeyboard(reset = false) {
+    if (!keyboardRoot) return;
+    KEYBOARD_LAYOUT.flat().forEach(k => {
+        const el = keyElements[k];
+        const stats = reset ? { total: 0, errors: 0 } : (state.perLetterStats[k] || { total: 0, errors: 0 });
+        const errRate = stats.total ? stats.errors / stats.total : 0;
+        el.querySelector('.vk-meta').textContent = `${Math.round(errRate * 100)}% • ${stats.errors}/${stats.total}`;
+        el.style.background = colorForErrorRate(errRate);
+        el.style.color = '#fff';
+    });
+}
+
+function colorForErrorRate(rate) {
+    // 0 -> green, 1 -> red through yellow; use HSL
+    const hue = (1 - Math.min(rate, 1)) * 120; // 120 (green) to 0 (red)
+    return `hsl(${hue}, 65%, 40%)`;
 }
 

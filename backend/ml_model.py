@@ -1,5 +1,4 @@
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from scipy.spatial.distance import euclidean, cosine
 from typing import Dict, List, Tuple
@@ -14,8 +13,8 @@ class KeystrokeBiometrics:
     """
     
     def __init__(self):
+        # Глобальный скейлер для нормализации признаков; обучается на всех доступных вектрах
         self.scaler = StandardScaler()
-        self.model = None
         self.feature_names = [
             'dwell_mean', 'dwell_std', 'dwell_median', 'dwell_min', 'dwell_max',
             'latency_mean', 'latency_std', 'latency_median', 'latency_min', 'latency_max',
@@ -26,43 +25,24 @@ class KeystrokeBiometrics:
     
     def train(self, users_data: Dict):
         """
-        Train model on user data
-        
-        Uses combination of methods:
-        1. Random Forest for classification
-        2. Distance-based matching for similarity scoring
+        Обучение скейлера на всех доступных образцах пользователей.
+        Distance-based идентификация не требует обучаемой модели, но
+        корректная нормализация признаков повышает качество сравнения.
         """
-        if not users_data or len(users_data) < 2:
-            # Insufficient data for training
+        if not users_data:
             return
-        
-        X = []
-        y = []
-        
-        for username, user_info in users_data.items():
-            features_list = user_info.get('features', [])
-            for features in features_list:
-                feature_vector = self._features_to_vector(features)
-                X.append(feature_vector)
-                y.append(username)
-        
-        if len(X) < 2:
+
+        vectors: List[np.ndarray] = []
+        for _, user_info in users_data.items():
+            for features in user_info.get('features', []):
+                vectors.append(self._features_to_vector(features))
+
+        if len(vectors) < 2:
+            # Недостаточно данных для устойчивой нормализации
             return
-        
-        X = np.array(X)
-        
-        # Feature normalization
+
+        X = np.array(vectors)
         self.scaler.fit(X)
-        X_scaled = self.scaler.transform(X)
-        
-        # Train Random Forest
-        self.model = RandomForestClassifier(
-            n_estimators=100,
-            max_depth=10,
-            random_state=42,
-            n_jobs=-1
-        )
-        self.model.fit(X_scaled, y)
     
     def identify(self, features: Dict, users_data: Dict, top_k: int = 5) -> List[Dict]:
         """
@@ -75,27 +55,27 @@ class KeystrokeBiometrics:
         
         feature_vector = self._features_to_vector(features)
         
-        # Collect all vectors for normalization
+        # Собираем все векторы для потенциальной подстройки скейлера
         all_vectors = [feature_vector]
-        user_vectors_map = {}
-        
-        for username, user_info in users_data.items():
-            user_features_list = user_info.get('features', [])
-            vectors = [self._features_to_vector(f) for f in user_features_list]
-            all_vectors.extend(vectors)
-            user_vectors_map[username] = vectors
-        
-        # Normalize all vectors together for correct comparison
+        for _, user_info in users_data.items():
+            all_vectors.extend([self._features_to_vector(f) for f in user_info.get('features', [])])
+
         all_vectors_array = np.array(all_vectors)
-        scaler = StandardScaler()
-        all_vectors_normalized = scaler.fit_transform(all_vectors_array)
-        
+
+        # Если скейлер ещё не обучен (первый запуск) — обучим на всех доступных векторах
+        if not hasattr(self.scaler, 'mean_'):
+            try:
+                self.scaler.fit(all_vectors_array)
+            except Exception:
+                pass
+
+        # Нормализуем тестовый и пользовательские векторы одним и тем же скейлером
+        all_vectors_normalized = self.scaler.transform(all_vectors_array)
         test_vector_normalized = all_vectors_normalized[0]
         
         # Calculate distance to each user
         similarities = []
         vector_idx = 1
-        
         for username, user_info in users_data.items():
             user_features_list = user_info.get('features', [])
             
@@ -266,26 +246,23 @@ class KeystrokeBiometrics:
         return float(confidence)
     
     def save_model(self, filepath: str):
-        """Save model"""
+        """Сохранить параметры нормализации (скейлер) и имена признаков"""
         model_data = {
             'scaler': self.scaler,
-            'model': self.model,
             'feature_names': self.feature_names
         }
         with open(filepath, 'wb') as f:
             pickle.dump(model_data, f)
     
     def load_model(self, filepath: str):
-        """Load model"""
+        """Загрузить сохранённый скейлер и имена признаков"""
         if not os.path.exists(filepath):
             return False
-        
+
         with open(filepath, 'rb') as f:
             model_data = pickle.load(f)
-        
+
         self.scaler = model_data['scaler']
-        self.model = model_data['model']
         self.feature_names = model_data['feature_names']
-        
         return True
 
