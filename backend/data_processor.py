@@ -38,12 +38,28 @@ class DataProcessor:
             latency = keydown_events[i + 1]['timestamp'] - keydown_events[i]['timestamp']
             inter_key_latencies.append(latency)
         
-        # Flight time (keyup of current to keydown of next)
+        # Flight time (keyup of current key to keydown of next key)
+        # Process events in chronological order for more accurate flight time calculation
         flight_times = []
-        for i in range(len(keyup_events) - 1):
-            if i + 1 < len(keydown_events):
-                flight = keydown_events[i + 1]['timestamp'] - keyup_events[i]['timestamp']
-                if flight > 0:  # only positive values
+        
+        # Filter out meta keys that shouldn't be used for flight time calculation
+        ignore_keys = {'Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Escape', 
+                      'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'}
+        filtered_events = [e for e in keystroke_events if e.get('key', '') not in ignore_keys]
+        
+        # Sort all events by timestamp
+        sorted_events = sorted(filtered_events, key=lambda x: x['timestamp'])
+        
+        for i in range(len(sorted_events) - 1):
+            current_event = sorted_events[i]
+            next_event = sorted_events[i + 1]
+            
+            # Flight time: keyup followed by keydown of different key
+            if (current_event['type'] == 'keyup' and 
+                next_event['type'] == 'keydown' and
+                current_event['key'] != next_event['key']):
+                flight = next_event['timestamp'] - current_event['timestamp']
+                if flight > 0 and flight < 10000:  # Reasonable flight time (less than 10 seconds)
                     flight_times.append(flight)
         
         # Digraph latencies (pair-wise)

@@ -2,16 +2,30 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Keystroke Biometrics - Identity Recognition</title>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
+        <!-- Mobile Panel Toggle -->
+        <div class="mobile-panel-toggle">
+            <button class="panel-toggle-btn active" id="toggleTypingPanel" data-panel="typing">
+                <span class="toggle-icon">⌨️</span>
+                <span class="toggle-text">Typing</span>
+            </button>
+            <button class="panel-toggle-btn" id="toggleResultsPanel" data-panel="results">
+                <span class="toggle-icon">📊</span>
+                <span class="toggle-text">Results</span>
+            </button>
+        </div>
+        
         <div class="main-content">
             <!-- Left Panel: Typing Test -->
-            <div class="typing-panel">
+            <div class="typing-panel" id="typingPanel">
                 <div class="card">
                     <div class="card-header">
                         <h2>🎯 Typing Test</h2>
@@ -103,7 +117,7 @@
             </div>
 
             <!-- Right Panel: Results -->
-            <div class="results-panel">
+            <div class="results-panel" id="resultsPanel">
                 <!-- Unified Users & Matches Panel -->
                 <div class="card">
                     <div class="card-header">

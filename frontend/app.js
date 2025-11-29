@@ -55,7 +55,11 @@ const elements = {
     featuresGrid: document.getElementById('featuresGrid'),
     userDetailsModal: document.getElementById('userDetailsModal'),
     closeModal: document.getElementById('closeModal'),
-    modalBody: document.getElementById('modalBody')
+    modalBody: document.getElementById('modalBody'),
+    toggleTypingPanel: document.getElementById('toggleTypingPanel'),
+    toggleResultsPanel: document.getElementById('toggleResultsPanel'),
+    typingPanel: document.getElementById('typingPanel'),
+    resultsPanel: document.getElementById('resultsPanel')
 };
 
 let isExistingUser = false;
@@ -107,6 +111,14 @@ function setupEventListeners() {
             closeUserDetailsModal();
         }
     });
+    
+    // Panel toggle buttons
+    if (elements.toggleTypingPanel) {
+        elements.toggleTypingPanel.addEventListener('click', () => togglePanel('typing'));
+    }
+    if (elements.toggleResultsPanel) {
+        elements.toggleResultsPanel.addEventListener('click', () => togglePanel('results'));
+    }
 }
 
 // ========================================
@@ -631,13 +643,26 @@ function calculateRealtimeFeatures() {
         latencies.push(keydownEvents[i].timestamp - keydownEvents[i-1].timestamp);
     }
     
-    // Flight times
+    // Flight times (keyup of current key to keydown of next key)
+    // Sort all events by timestamp to process in chronological order
+    const ignoreKeys = ['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'Tab', 'Escape', 'F1', 'F2', 'F3', 'F4', 'F5', 'F6', 'F7', 'F8', 'F9', 'F10', 'F11', 'F12'];
+    const allEvents = [...state.keystrokeEvents]
+        .filter(e => !ignoreKeys.includes(e.key)) // Filter out meta keys
+        .sort((a, b) => a.timestamp - b.timestamp);
     const flightTimes = [];
-    for (let i = 0; i < keyupEvents.length - 1; i++) {
-        if (i + 1 < keydownEvents.length) {
-            const flight = keydownEvents[i + 1].timestamp - keyupEvents[i].timestamp;
-            if (flight > 0) {
-                flightTimes.push(flight);
+    
+    for (let i = 0; i < allEvents.length - 1; i++) {
+        const currentEvent = allEvents[i];
+        const nextEvent = allEvents[i + 1];
+        
+        // Flight time: keyup followed by keydown of different key
+        if (currentEvent.type === 'keyup' && nextEvent.type === 'keydown') {
+            // Make sure it's a different key (not the same key being released and pressed again)
+            if (currentEvent.key !== nextEvent.key) {
+                const flight = nextEvent.timestamp - currentEvent.timestamp;
+                if (flight > 0 && flight < 10000) { // Reasonable flight time (less than 10 seconds)
+                    flightTimes.push(flight);
+                }
             }
         }
     }
@@ -1149,5 +1174,25 @@ function colorForErrorRate(rate) {
     // 0 -> green, 1 -> red through yellow; use HSL
     const hue = (1 - Math.min(rate, 1)) * 120; // 120 (green) to 0 (red)
     return `hsl(${hue}, 65%, 40%)`;
+}
+
+// ========================================
+// Panel Toggle (Mobile)
+// ========================================
+
+function togglePanel(panel) {
+    if (!elements.typingPanel || !elements.resultsPanel) return;
+    
+    if (panel === 'typing') {
+        elements.typingPanel.classList.add('active');
+        elements.resultsPanel.classList.remove('active');
+        if (elements.toggleTypingPanel) elements.toggleTypingPanel.classList.add('active');
+        if (elements.toggleResultsPanel) elements.toggleResultsPanel.classList.remove('active');
+    } else if (panel === 'results') {
+        elements.typingPanel.classList.remove('active');
+        elements.resultsPanel.classList.add('active');
+        if (elements.toggleTypingPanel) elements.toggleTypingPanel.classList.remove('active');
+        if (elements.toggleResultsPanel) elements.toggleResultsPanel.classList.add('active');
+    }
 }
 

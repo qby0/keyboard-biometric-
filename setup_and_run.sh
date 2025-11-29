@@ -105,6 +105,15 @@ case $choice in
     2)
         echo -e "\n${GREEN}🚀 Starting full system...${NC}\n"
         
+        # Check if port 5000 is available
+        if lsof -i :5000 >/dev/null 2>&1 || netstat -tuln 2>/dev/null | grep -q ":5000 " || ss -tuln 2>/dev/null | grep -q ":5000 "; then
+            echo -e "${YELLOW}⚠️  Port 5000 is already in use. Trying to free it...${NC}"
+            lsof -ti :5000 | xargs kill -9 2>/dev/null || \
+            (netstat -tuln 2>/dev/null | grep ":5000 " | awk '{print $7}' | cut -d'/' -f1 | xargs kill -9 2>/dev/null) || \
+            (ss -tuln 2>/dev/null | grep ":5000 " | awk '{print $6}' | cut -d':' -f2 | xargs kill -9 2>/dev/null)
+            sleep 2
+        fi
+        
         # Run backend in background
         cd "$PROJECT_DIR/backend"
         source venv/bin/activate
@@ -126,10 +135,26 @@ case $choice in
         
         # Start frontend
         echo -e "\n${GREEN}🌐 Starting Frontend...${NC}"
-        echo -e "${CYAN}Open browser at: ${YELLOW}http://localhost:8000${NC}\n"
+        
+        # Check if port 8000 is available
+        FRONTEND_PORT=8000
+        if lsof -i :8000 >/dev/null 2>&1 || netstat -tuln 2>/dev/null | grep -q ":8000 " || ss -tuln 2>/dev/null | grep -q ":8000 "; then
+            echo -e "${YELLOW}⚠️  Port 8000 is already in use. Trying to free it...${NC}"
+            lsof -ti :8000 | xargs kill -9 2>/dev/null || \
+            (netstat -tuln 2>/dev/null | grep ":8000 " | awk '{print $7}' | cut -d'/' -f1 | xargs kill -9 2>/dev/null) || \
+            (ss -tuln 2>/dev/null | grep ":8000 " | awk '{print $6}' | cut -d':' -f2 | xargs kill -9 2>/dev/null)
+            sleep 2
+            # If still in use, try alternative port
+            if lsof -i :8000 >/dev/null 2>&1 || netstat -tuln 2>/dev/null | grep -q ":8000 " || ss -tuln 2>/dev/null | grep -q ":8000 "; then
+                FRONTEND_PORT=8001
+                echo -e "${YELLOW}Using alternative port ${FRONTEND_PORT}${NC}"
+            fi
+        fi
+        
+        echo -e "${CYAN}Open browser at: ${YELLOW}http://localhost:${FRONTEND_PORT}${NC}\n"
         
         cd "$PROJECT_DIR/frontend"
-        python3 -m http.server 8000
+        python3 -m http.server ${FRONTEND_PORT}
         
         # Stop backend when frontend server exits
         kill $BACKEND_PID 2>/dev/null
@@ -137,6 +162,15 @@ case $choice in
     
     3)
         echo -e "\n${GREEN}🧪 Starting Backend and tests...${NC}\n"
+        
+        # Check if port 5000 is available
+        if lsof -i :5000 >/dev/null 2>&1 || netstat -tuln 2>/dev/null | grep -q ":5000 " || ss -tuln 2>/dev/null | grep -q ":5000 "; then
+            echo -e "${YELLOW}⚠️  Port 5000 is already in use. Trying to free it...${NC}"
+            lsof -ti :5000 | xargs kill -9 2>/dev/null || \
+            (netstat -tuln 2>/dev/null | grep ":5000 " | awk '{print $7}' | cut -d'/' -f1 | xargs kill -9 2>/dev/null) || \
+            (ss -tuln 2>/dev/null | grep ":5000 " | awk '{print $6}' | cut -d':' -f2 | xargs kill -9 2>/dev/null)
+            sleep 2
+        fi
         
         # Run backend in background
         cd "$PROJECT_DIR/backend"
