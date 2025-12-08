@@ -35,3 +35,4 @@ logs/
 coverage/
 .eggs/
 *.egg-info/
+main.pdf
